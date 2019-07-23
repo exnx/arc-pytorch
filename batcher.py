@@ -87,8 +87,8 @@ class Omniglot(object):
             Thus the actual number of images outputted is 2 * batch_size
             Say A & B form the half of a pair
             The Batch is divided into 4 parts:
-                Dissimilar A 		Dissimilar B
-                Similar A 			Similar B
+                (Dissimilar A, Dissimilar B)
+                (Similar A, Similar B)
 
             Corresponding images in Similar A and Similar B form the similar pair
             similarly, Dissimilar A and Dissimilar B form the dissimilar pair
@@ -153,14 +153,18 @@ class Batcher(Omniglot):
             batch_size = self.batch_size
 
         data = self.data
-        starts = self.starts[part]
-        sizes = self.sizes[part]
-        p = self.p[part]
+        starts = self.starts[part]  # provides alphabet starts for each part of dataset (train/val/test)
+        sizes = self.sizes[part]  # sizes tells you the number of alphabets in each dataset part
+        p = self.p[part]  # probability of sampling an alphabet
         image_size = self.image_size
 
-        num_alphbts = len(starts)
+        num_alphbts = len(starts)  # number of alphabets
 
+        # fill up this matrix with the batch (pairs of images, size, size)
         X = np.zeros((2 * batch_size, image_size, image_size), dtype='uint8')
+        
+        # loop through half the batch size, since we'll fill up 2 pairs at a time
+        # 1 similar pair, and 1 dissimilar pair
         for i in range(batch_size // 2):
             # choose similar chars
             same_idx = choice(range(starts[0], starts[-1] + sizes[-1]))
