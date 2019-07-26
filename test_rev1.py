@@ -4,6 +4,8 @@ import torch
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
+from PIL import Image
+from torchvision import transforms
 
 from models import ArcBinaryClassifier
 from batcher import Batcher
@@ -20,7 +22,9 @@ parser.add_argument('--cuda', action='store_true', help='enables cuda')
 parser.add_argument('--name', default=None, help='Custom name for this configuration. Needed for loading model'
                                                  'and saving images')
 parser.add_argument('--load', required=True, help='the model to load from.')
-parser.add_argument('--same', action='store_true', help='whether to generate same character pairs or not')
+parser.add_argument('--img1', required=True, help='path to first image to compare')
+parser.add_argument('--img2', required=True, help='path to second image to compare.')
+# parser.add_argument('--same', action='store_true', help='whether to generate same character pairs or not')
 
 opt = parser.parse_args()
 
@@ -62,42 +66,78 @@ def display(image1, mask1, image2, mask2, name="hola.png"):
 
 def get_sample(discriminator):
 
-    # size of the set to choose sample from from
-    sample_size = 30
-    X, Y = batcher.fetch_batch("train", batch_size=sample_size)
+    # batching....
 
-    print('X shape', X.shape)
+    mean_pixel = 0.08051840363667802
+
+    SIZE = 32
+
+    path_img1 = opt.img1
+    path_img2 = opt.img2
+
+    img1_img = Image.open(path_img1)
+    img2_img = Image.open(path_img2)
+    #
+    # img1_img = np.asarray(img1_img.resize((SIZE, SIZE)), dtype=np.float32)
+    # img2_img = np.asarray(img1_img.resize((SIZE, SIZE)), dtype=np.float32)
+    #
+    # print('img', img1_img)
+    #
+    #
+    # print('image shape', img1_img.shape)
+    # print('image pixel value', img1_img)
+
+
+    # print('image size', img1_img.size)
+
+    transform = transforms.Compose([
+        transforms.Resize(size=SIZE),  # resize first
+        transforms.ToTensor()  # convert to tensor
+    ])
+
+    img1_tensor = transform(img1_img)
+    img2_tensor = transform(img2_img)
+
+    print(img1_tensor.shape)
+
+    # img1_tensor = torch.from_numpy(img1_img)
+    # img2_tensor = torch.from_numpy(img2_img)
+
+    X = torch.stack([img1_tensor, img2_tensor], dim=1)  # (B, 2, h, w)  # array of image PAIRS now!!
+
+    X = X - mean_pixel
+
+    # end batching...
 
     pred = discriminator(X)
 
-    pred = discriminator(X)
-    print('pred:', pred.data.numpy())
+    print('X shape',  X.shape)
 
+    print('pred', pred)
+    print('pred shape', pred.shape)
 
-    if opt.same:
-        same_pred = pred[sample_size // 2:].data.numpy()[:, 0]  # get first score for all
-        mx = same_pred.argsort()[len(same_pred) // 2]  # choose the sample with median confidence
-        index = mx + sample_size // 2
+    # print('Y true score', Y[index])
 
+    # print('X shape', X.shape)
 
-    else:
-        diff_pred = pred[:sample_size // 2].data.numpy()[:, 0]
-        mx = diff_pred.argsort()[len(diff_pred) // 2]  # choose the sample with median confidence
-        index = mx
+    # should return 2 x Size x Size (select one from Batch, i.e. the first)
+    return X[0]
 
-    # print('index', index)
-    # print('print X.shape', X.shape)
-
-    # print('Y true shape', Y.shape)
-    print('Y true', Y)
-
-
-    print('X pred score', pred[index])
-    print('Y true score', Y[index])
-
-    print('index', index)
-
-    return X[index]
+    # # size of the set to choose sample from from
+    # sample_size = 30
+    # X, Y = batcher.fetch_batch("train", batch_size=sample_size)
+    # pred = discriminator(X)
+    #
+    # if opt.same:
+    #     same_pred = pred[sample_size // 2:].data.numpy()[:, 0]
+    #     mx = same_pred.argsort()[len(same_pred) // 2]  # choose the sample with median confidence
+    #     index = mx + sample_size // 2
+    # else:
+    #     diff_pred = pred[:sample_size // 2].data.numpy()[:, 0]
+    #     mx = diff_pred.argsort()[len(diff_pred) // 2]  # choose the sample with median confidence
+    #     index = mx
+    #
+    # return X[index]
 
 
 def visualize():
@@ -111,11 +151,9 @@ def visualize():
 
     arc = discriminator.arc
 
-
     sample = get_sample(discriminator)
 
-    print('sample shape', sample.shape)
-
+    # print('sample shape', sample.shape)
 
     all_hidden = arc._forward(sample[None, :, :])[:, 0, :]  # (2*numGlimpses, controller_out)
     glimpse_params = torch.tanh(arc.glimpser(all_hidden))

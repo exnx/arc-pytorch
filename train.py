@@ -95,6 +95,9 @@ def train():
             pred_val = discriminator(X_val)
             loss_val = bce(pred_val, Y_val.float())
 
+            print('prediction', pred_val)
+            print('Y_val', pred_val)
+
             # training_loss = loss.data[0]
             # validation_loss = loss_val.data[0]
 

@@ -214,6 +214,8 @@ class ARC(nn.Module):
 
         """
 
+        print('image_pairs shape in proper:', image_pairs.shape)
+
         # convert to images to float.
         image_pairs = image_pairs.float()
 

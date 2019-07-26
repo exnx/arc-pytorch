@@ -132,14 +132,14 @@ class Batcher(Omniglot):
         if batch_size is None:
             batch_size = self.batch_size
 
-        X, Y = self._fetch_batch(part, batch_size)
+        X, Y = self._fetch_batch(part, batch_size)  # array of single images
 
         X = Variable(torch.from_numpy(X)).view(2*batch_size, self.image_size, self.image_size)
 
         X1 = X[:batch_size]  # (B, h, w)
         X2 = X[batch_size:]  # (B, h, w)
 
-        X = torch.stack([X1, X2], dim=1)  # (B, 2, h, w)
+        X = torch.stack([X1, X2], dim=1)  # (B, 2, h, w)  # array of image PAIRS now!!
 
         Y = Variable(torch.from_numpy(Y))
 
@@ -162,24 +162,24 @@ class Batcher(Omniglot):
 
         # fill up this matrix with the batch (pairs of images, size, size)
         X = np.zeros((2 * batch_size, image_size, image_size), dtype='uint8')
-        
+
         # loop through half the batch size, since we'll fill up 2 pairs at a time
         # 1 similar pair, and 1 dissimilar pair
         for i in range(batch_size // 2):
-            # choose similar chars
+            # choose similar chars.  choose char idx from start to end of alphabet idxs
             same_idx = choice(range(starts[0], starts[-1] + sizes[-1]))
 
             # choose dissimilar chars within alphabet
             alphbt_idx = choice(num_alphbts, p=p)
-            char_offset = choice(sizes[alphbt_idx], 2, replace=False)
-            diff_idx = starts[alphbt_idx] + char_offset
+            char_offset = choice(sizes[alphbt_idx], 2, replace=False)  # np array of 2 numbers
+            diff_idx = starts[alphbt_idx] + char_offset  # starts = all alphabet start idxs, so 2 offsets gives 2 diff_idxs
 
-            X[i], X[i + batch_size] = data[diff_idx, choice(20, 2)]
-            X[i + batch_size // 2], X[i + 3 * batch_size // 2] = data[same_idx, choice(20, 2, replace=False)]
+            X[i], X[i + batch_size] = data[diff_idx, choice(20, 2)]  # 2 diff idx and 2 nums between 0-19 gives 2 diff chars imgs
+            X[i + batch_size // 2], X[i + 3 * batch_size // 2] = data[same_idx, choice(20, 2, replace=False)]  # chooses same char within alphabet?
 
         y = np.zeros((batch_size, 1), dtype='int32')
-        y[:batch_size // 2] = 0
-        y[batch_size // 2:] = 1
+        y[:batch_size // 2] = 0  # first half are diff imgs
+        y[batch_size // 2:] = 1  # second half are same imgs
 
         if part == 'train':
             X = self.augmentor.augment_batch(X)
@@ -187,8 +187,11 @@ class Batcher(Omniglot):
             X = X / 255.0
 
         X = X - self.mean_pixel
+
+
+        print('mean pixel', self.mean_pixel)
+
         X = X[:, np.newaxis]
         X = X.astype("float32")
 
         return X, y
-
