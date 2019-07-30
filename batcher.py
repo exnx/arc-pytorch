@@ -134,12 +134,18 @@ class Batcher(Omniglot):
 
         X, Y = self._fetch_batch(part, batch_size)  # array of single images
 
+        print('X shape before tensor conversion', X.shape)
+
         X = Variable(torch.from_numpy(X)).view(2*batch_size, self.image_size, self.image_size)
+
+        print('X shape after reshape', X.shape)
 
         X1 = X[:batch_size]  # (B, h, w)
         X2 = X[batch_size:]  # (B, h, w)
 
         X = torch.stack([X1, X2], dim=1)  # (B, 2, h, w)  # array of image PAIRS now!!
+
+        print('X shape after stack', X.shape)
 
         Y = Variable(torch.from_numpy(Y))
 
@@ -188,10 +194,14 @@ class Batcher(Omniglot):
 
         X = X - self.mean_pixel
 
+        # print('mean pixel', self.mean_pixel)
+        # print('batch size', batch_size)
 
-        print('mean pixel', self.mean_pixel)
+        print('X before new axis in _fetch batch', X.shape)
 
         X = X[:, np.newaxis]
         X = X.astype("float32")
+
+        print('X shape in _fetch batch', X.shape)
 
         return X, y

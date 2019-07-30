@@ -9,6 +9,9 @@ from torchvision import transforms
 
 from models import ArcBinaryClassifier
 from batcher import Batcher
+from scipy.ndimage import imread
+import scipy.misc
+from scipy.misc import imresize as resize
 
 
 parser = argparse.ArgumentParser()
@@ -24,6 +27,8 @@ parser.add_argument('--name', default=None, help='Custom name for this configura
 parser.add_argument('--load', required=True, help='the model to load from.')
 parser.add_argument('--img1', required=True, help='path to first image to compare')
 parser.add_argument('--img2', required=True, help='path to second image to compare.')
+parser.add_argument('--img3', required=True, help='path to third image to compare')
+parser.add_argument('--img4', required=True, help='path to fourth image to compare.')
 # parser.add_argument('--same', action='store_true', help='whether to generate same character pairs or not')
 
 opt = parser.parse_args()
@@ -63,82 +68,89 @@ def display(image1, mask1, image2, mask2, name="hola.png"):
 
     plt.savefig(os.path.join(images_path, name))
 
-
-def get_sample(discriminator):
-
-    # batching....
-
-    mean_pixel = 0.08051840363667802
-
+def read_img(img_path):
     SIZE = 32
+    # mean_pixel = 0.08051840363667802
+    img = imread(img_path)
+    img_np = np.invert(img)
+    img_rs = resize(img_np, (SIZE, SIZE)).astype("float32")
+    # img_sm = img_rs - mean_pixel  # sub the mean
+    # img_sm = img_sm.astype("float32")
+    # scipy.misc.imsave('img_sm.jpg', img_sm)
+    # img_tensor = torch.from_numpy(img_sm)
+    return img_rs
+
+def _fetch_batch():
+    mean_pixel = 0.08051840363667802
+    image_size = 32
+    batch_size = 2
 
     path_img1 = opt.img1
     path_img2 = opt.img2
+    path_img3 = opt.img3
+    path_img4 = opt.img4
 
-    img1_img = Image.open(path_img1)
-    img2_img = Image.open(path_img2)
-    #
-    # img1_img = np.asarray(img1_img.resize((SIZE, SIZE)), dtype=np.float32)
-    # img2_img = np.asarray(img1_img.resize((SIZE, SIZE)), dtype=np.float32)
-    #
-    # print('img', img1_img)
-    #
-    #
-    # print('image shape', img1_img.shape)
-    # print('image pixel value', img1_img)
+    # use scipy imread
+    img1 = read_img(path_img1)
+    img2 = read_img(path_img2)
+    img3 = read_img(path_img3)
+    img4 = read_img(path_img4) # 32 x 32
 
+    X = np.zeros((2 * batch_size, image_size, image_size), dtype='uint8')
 
-    # print('image size', img1_img.size)
+    X[0] = img1  # diff
+    X[1] = img2  # same
+    X[2] = img3  # diff
+    X[3] = img4  # same
 
-    transform = transforms.Compose([
-        transforms.Resize(size=SIZE),  # resize first
-        transforms.ToTensor()  # convert to tensor
-    ])
-
-    img1_tensor = transform(img1_img)
-    img2_tensor = transform(img2_img)
-
-    print(img1_tensor.shape)
-
-    # img1_tensor = torch.from_numpy(img1_img)
-    # img2_tensor = torch.from_numpy(img2_img)
-
-    X = torch.stack([img1_tensor, img2_tensor], dim=1)  # (B, 2, h, w)  # array of image PAIRS now!!
-
+    X = X / 255.0
     X = X - mean_pixel
 
-    # end batching...
+    print('X shape should be 4 x 32 x 32', X.shape)
+
+    X = X[:, np.newaxis]
+    X = X.astype("float32")
+
+    print('X shape should be 4 x 1 x 32 x 32', X.shape)
+
+    return X
+
+def fetch_batch():
+    image_size = 32
+    batch_size = 2
+
+    X = _fetch_batch()
+
+    X = torch.from_numpy(X).view(2*batch_size, image_size, image_size)
+
+    # should be 4, 32, 32
+    print('in fetch batch:  X shape should be 4 x 32 x 32', X.shape)
+
+    X1 = X[:batch_size]  # (B, h, w)
+    X2 = X[batch_size:]  # (B, h, w)
+
+    X = torch.stack([X1, X2], dim=1)  # (B, 2, h, w)  # array of image PAIRS now!!
+
+    print('in fetch batch:  X shape should be 2 x 2 x 32 x 32', X.shape)
+
+    return X
+
+
+def get_sample(discriminator, batch_size=2):
+
+    X = fetch_batch()
+
+    print('X shape in get sample', X.shape)
+
 
     pred = discriminator(X)
 
-    print('X shape',  X.shape)
-
-    print('pred', pred)
+    # print('pred %:', pred[0][0].item()*100)
     print('pred shape', pred.shape)
-
-    # print('Y true score', Y[index])
-
-    # print('X shape', X.shape)
+    print('pred', pred)
 
     # should return 2 x Size x Size (select one from Batch, i.e. the first)
     return X[0]
-
-    # # size of the set to choose sample from from
-    # sample_size = 30
-    # X, Y = batcher.fetch_batch("train", batch_size=sample_size)
-    # pred = discriminator(X)
-    #
-    # if opt.same:
-    #     same_pred = pred[sample_size // 2:].data.numpy()[:, 0]
-    #     mx = same_pred.argsort()[len(same_pred) // 2]  # choose the sample with median confidence
-    #     index = mx + sample_size // 2
-    # else:
-    #     diff_pred = pred[:sample_size // 2].data.numpy()[:, 0]
-    #     mx = diff_pred.argsort()[len(diff_pred) // 2]  # choose the sample with median confidence
-    #     index = mx
-    #
-    # return X[index]
-
 
 def visualize():
 
@@ -153,7 +165,7 @@ def visualize():
 
     sample = get_sample(discriminator)
 
-    # print('sample shape', sample.shape)
+    print('sample shape', sample.shape)
 
     all_hidden = arc._forward(sample[None, :, :])[:, 0, :]  # (2*numGlimpses, controller_out)
     glimpse_params = torch.tanh(arc.glimpser(all_hidden))
@@ -171,7 +183,7 @@ def visualize():
 
     for i, (mask1, mask2) in enumerate(zip(masks1, masks2)):
         display(sample[0], mask1, sample[1], mask2, "img_{}".format(i))
-        print('made it here too!')
+        # print('made it here too!')
 
 if __name__ == "__main__":
     visualize()

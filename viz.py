@@ -37,7 +37,7 @@ os.makedirs(images_path, exist_ok=True)
 
 # initialise the batcher
 batcher = Batcher(batch_size=opt.batchSize)
-
+# print('batch size', opt.batchSize)
 
 def display(image1, mask1, image2, mask2, name="hola.png"):
     _, ax = plt.subplots(1, 2)
@@ -63,16 +63,16 @@ def display(image1, mask1, image2, mask2, name="hola.png"):
 def get_sample(discriminator):
 
     # size of the set to choose sample from from
-    sample_size = 30
+    # sample_size = 30
+    sample_size = 2
+
     X, Y = batcher.fetch_batch("train", batch_size=sample_size)
 
     print('X shape', X.shape)
 
     pred = discriminator(X)
 
-    pred = discriminator(X)
     print('pred:', pred.data.numpy())
-
 
     if opt.same:
         same_pred = pred[sample_size // 2:].data.numpy()[:, 0]  # get first score for all
@@ -91,12 +91,12 @@ def get_sample(discriminator):
     # print('Y true shape', Y.shape)
     print('Y true', Y)
 
-
     print('X pred score', pred[index])
     print('Y true score', Y[index])
 
     print('index', index)
 
+    # return X[0]
     return X[index]
 
 
