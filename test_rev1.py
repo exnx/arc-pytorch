@@ -112,12 +112,8 @@ def _fetch_batch():
     X = X / 255.0
     X = X - mean_pixel
 
-    print('X shape should be 4 x 32 x 32', X.shape)
-
     X = X[:, np.newaxis]
     X = X.astype("float32")
-
-    print('X shape should be 4 x 1 x 32 x 32', X.shape)
 
     return X
 
@@ -130,14 +126,10 @@ def fetch_batch():
     X = torch.from_numpy(X).view(2*batch_size, image_size, image_size)
 
     # should be 4, 32, 32
-    print('in fetch batch:  X shape should be 4 x 32 x 32', X.shape)
-
     X1 = X[:batch_size]  # (B, h, w)
     X2 = X[batch_size:]  # (B, h, w)
 
     X = torch.stack([X1, X2], dim=1)  # (B, 2, h, w)  # array of image PAIRS now!!
-
-    print('in fetch batch:  X shape should be 2 x 2 x 32 x 32', X.shape)
 
     return X
 
@@ -146,13 +138,9 @@ def get_sample(discriminator, batch_size=2):
 
     X = fetch_batch()
 
-    print('X shape in get sample', X.shape)
-
     pred = discriminator(X)
 
     # print('pred %:', pred[0][0].item()*100)
-    print('pred shape', pred.shape)
-    print('pred', pred)
 
     # should return 2 x Size x Size (select one from Batch, i.e. the first)
     return X[0]
@@ -170,7 +158,7 @@ def visualize():
 
     sample = get_sample(discriminator)
 
-    print('sample shape', sample.shape)
+    # print('sample shape', sample.shape)
 
     all_hidden = arc._forward(sample[None, :, :])[:, 0, :]  # (2*numGlimpses, controller_out)
     glimpse_params = torch.tanh(arc.glimpser(all_hidden))

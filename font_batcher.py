@@ -34,9 +34,9 @@ class Fonts(object):
             translation_px: in both x and y directions
         """
 
-        num_chars_in_alphbt = 62  # num of chars used
-        num_alphbts = 66  # num alphabets (fonts)
-        num_chars_instances = 4092  # num char instances, which is num_chars * num_alphbts
+        num_chars_in_font = 62  # num of chars used
+        num_fonts = 65  # num fonts
+        num_chars_instances = 65*62  # 4030 num char instances, which is num_chars * num_fonts
         num_samples_per_char = 100  # samples per char
 
         chars = np.load(path)
@@ -52,26 +52,10 @@ class Fonts(object):
 
         # start of each alphbt in a list of chars
         a_start = []
-        for i in range(num_alphbts):
-            a_start.append(i * num_chars_in_alphbt)
+        for i in range(num_fonts):
+            a_start.append(i * num_chars_in_font)
 
-        # # starting index of each alphabet in a list of chars
-        # a_start = [0, 20, 49, 75, 116, 156, 180, 226, 240, 266, 300, 333, 355, 381,
-        #            424, 448, 496, 518, 534, 586, 633, 673, 699, 739, 780, 813,
-        #            827, 869, 892, 909, 964, 984, 1010, 1036, 1062, 1088, 1114,
-        #            1159, 1204, 1245, 1271, 1318, 1358, 1388, 1433, 1479, 1507,
-        #            1530, 1555, 1597]
-
-        a_size = [62] * num_alphbts
-        # for j in range(1, num_alphbts-1):
-        #     a_size.append(j * num_chars_in_alphbt)
-
-        # print('alphabet len', len(a_size))
-
-        # # size of each alphabet (num of chars)
-        # a_size = [20, 29, 26, 41, 40, 24, 46, 14, 26, 34, 33, 22, 26, 43, 24, 48, 22,
-        #           16, 52, 47, 40, 26, 40, 41, 33, 14, 42, 23, 17, 55, 20, 26, 26, 26,
-        #           26, 26, 45, 45, 41, 26, 47, 40, 30, 45, 46, 28, 23, 25, 42, 26]
+        a_size = [62] * num_fonts
 
         # each alphabet/language has different number of characters.
         # in order to uniformly sample all characters, we need weigh the probability
@@ -83,22 +67,13 @@ class Fonts(object):
         self.size2p = size2p
 
         self.num_samples_per_char = num_samples_per_char
-        self.num_chars_in_alphbt = num_chars_in_alphbt
+        self.num_chars_in_font = num_chars_in_font
+        self.num_fonts = num_fonts
         self.data = chars
         self.a_start = a_start
         self.a_size = a_size
         self.image_size = image_size
         self.batch_size = batch_size
-
-        # flip = True
-        # scale = 0.2
-        # rotation_deg = 20
-        # shear_deg = 10
-        # translation_px = 5
-        # self.augmentor = ImageAugmenter(image_size, image_size,
-        #                                 hflip=flip, vflip=flip,
-        #                                 scale_to_percent=1.0 + scale, rotation_deg=rotation_deg, shear_deg=shear_deg,
-        #                                 translation_x_px=translation_px, translation_y_px=translation_px)
 
     def fetch_batch(self, part):
         """
@@ -179,12 +154,12 @@ class Batcher(Fonts):
             batch_size = self.batch_size
 
         data = self.data
-        starts = self.starts[part]  # provides alphabet starts for each part of dataset (train/val/test)
-        sizes = self.sizes[part]  # sizes tells you the number of alphabets in each dataset part
-        p = self.p[part]  # probability of sampling an alphabet
+        starts = self.starts[part]  # provides font starts for each part of dataset (train/val/test)
+        sizes = self.sizes[part]  # sizes tells you the number of fonts in each dataset part
+        p = self.p[part]  # probability of sampling a font
         image_size = self.image_size
 
-        num_alphbts = len(starts)  # number of alphabets
+        num_fonts = len(starts)  # number of alphabets
 
         # fill up this matrix with the batch (pairs of images, size, size)
         X = np.zeros((2 * batch_size, image_size, image_size), dtype='uint8')
@@ -192,16 +167,31 @@ class Batcher(Fonts):
         # loop through half the batch size, since we'll fill up 2 pairs at a time
         # 1 similar pair, and 1 dissimilar pair
         for i in range(batch_size // 2):
-            # choose similar chars.  choose char idx from start to end of alphabet idxs
-            same_idx = choice(range(starts[0], starts[-1] + sizes[-1]))
 
-            # choose dissimilar chars within alphabet
-            alphbt_idx = choice(num_alphbts, p=p)
-            char_offset = choice(sizes[alphbt_idx], 2, replace=False)  # np array of 2 numbers
-            diff_idx = starts[alphbt_idx] + char_offset  # starts = all alphabet start idxs, so 2 offsets gives 2 diff_idxs
+            # choose similar chars
+            # choose similar fonts
 
-            X[i], X[i + batch_size] = data[diff_idx, choice(self.num_samples_per_char, 2)]  # 2 diff idx and 2 nums between 0-19 gives 2 diff chars imgs
-            X[i + batch_size // 2], X[i + 3 * batch_size // 2] = data[same_idx, choice(self.num_samples_per_char, 2, replace=False)]  # chooses same char within alphabet
+            # choose similar chars
+            # choose different fonts
+
+            # choose similar chars.  choose char idx from start to end of font idxs
+            same_char_idx = choice(self.num_chars_in_font)  # this is the offset from the font start
+            same_font_idx = choice(starts)  # choose a font for the similar case
+            same_sample_idx1, same_sample_idx2 = choice(self.num_samples_per_char, 2)  # choose 2 diff samples from the char
+
+            # choose similar chars.
+            diff_char_idx = choice(self.num_chars_in_font)  # this is the offset from the font starts
+            diff_font_idx1, diff_font_idx2 = choice(starts, 2)
+            diff_sample_idx1, diff_sample_idx2 = choice(self.num_samples_per_char, 2)
+
+            # similar font pair, note:  the char offset is the same though, and sample num is diff
+            X[i + batch_size // 2] = data[same_font_idx + same_char_idx, same_sample_idx1]
+            X[i + 3 * batch_size // 2] = data[same_font_idx + same_char_idx, same_sample_idx2]
+
+            # dissimilar font pair, note:  the char offset is the same though, and sample num is diff
+            X[i] = data[diff_font_idx1 + diff_char_idx, diff_sample_idx1]
+            X[i + batch_size] = data[diff_font_idx2 + diff_char_idx, diff_sample_idx2]
+
 
         y = np.zeros((batch_size, 1), dtype='int32')
         y[:batch_size // 2] = 0  # first half are diff imgs
@@ -210,9 +200,6 @@ class Batcher(Fonts):
         X = X / 255.0
 
         X = X - self.mean_pixel
-
-        # print('mean pixel', self.mean_pixel)
-        # print('batch size', batch_size)
 
         # print('X before new axis in _fetch batch', X.shape)
 
