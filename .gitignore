@@ -1,7 +1,7 @@
 .idea/
 data/
 *.ipynb
-saved_models/
+saved_models/omniglot
 visualization/
 # Byte-compiled / optimized / DLL files
 __pycache__/
