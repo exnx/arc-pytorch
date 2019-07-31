@@ -71,8 +71,14 @@ def display(image1, mask1, image2, mask2, name="hola.png"):
 def read_img(img_path):
     SIZE = 32
     # mean_pixel = 0.08051840363667802
-    img = imread(img_path)
-    img_np = np.invert(img)
+    # img = imread(img_path)
+    img = Image.open(img_path).convert('L')  # ensure a gray image
+    img_np = np.asarray(img)  # convert to numpy
+
+    img_np = np.invert(img)  # flip black and white
+
+    # scipy.misc.imsave('img_gray.png', img_np)
+
     img_rs = resize(img_np, (SIZE, SIZE)).astype("float32")
     # img_sm = img_rs - mean_pixel  # sub the mean
     # img_sm = img_sm.astype("float32")
@@ -141,7 +147,6 @@ def get_sample(discriminator, batch_size=2):
     X = fetch_batch()
 
     print('X shape in get sample', X.shape)
-
 
     pred = discriminator(X)
 

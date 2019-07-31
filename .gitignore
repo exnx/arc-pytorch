@@ -105,3 +105,8 @@ ENV/
 # mypy
 .mypy_cache/
 /data
+
+/data_cropped
+/font_imgs
+/tests
+/visualizations
