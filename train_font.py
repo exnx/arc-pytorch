@@ -9,6 +9,9 @@ from font_batcher import Batcher
 import models
 from models import ArcBinaryClassifier
 
+import multiprocessing
+import time
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
@@ -130,7 +133,20 @@ def train():
 
 
 def main() -> None:
+
+    p = multiprocessing.Process(target=train, name="Train")
+    p.start()
+
     train()
+
+    time.sleep(10)  # 14400 secs for 4 hrs
+
+    # If thread is active
+    if p.is_alive():
+        print("train is running... let's kill it...")
+
+        # Terminate foo
+        p.terminate()
 
 
 if __name__ == "__main__":
