@@ -29,6 +29,10 @@ parser.add_argument('--name', default=None, help='Custom name for this configura
                                                  'and saving images')
 parser.add_argument('--load', required=True, help='the model to load from.')
 
+# make font_imgs root
+images_path = './test_visuals'
+if not os.path.exists(images_path):
+    os.mkdir(images_path)
 
 opt = parser.parse_args()
 
@@ -38,29 +42,46 @@ if opt.name is None:
     opt.name = "{}_{}_{}_{}".format(opt.numGlimpses, opt.glimpseSize, opt.numStates,
                                     "cuda" if opt.cuda else "cpu")
 
-def get_pct_accuracy(pred, target):
-    hard_pred = (pred > 0.5).int()
-    # correct = (hard_pred == target).sum().data[0]
-    correct = (hard_pred == target).sum().item()
-    accuracy = float(correct) / target.size()[0]
-    accuracy = int(accuracy * 100)
-    return accuracy
+# initialise the batcher
+batcher = Batcher(batch_size=opt.batchSize)
 
-def test(epochs=1):
+
+def display(image1, mask1, image2, mask2, sample_pred, sample_target, name="hola.png"):
+    _, ax = plt.subplots(1, 2)
+
+    label = 'Target: {}, Pred: {:.3f}'.format(sample_target, sample_pred)
+
+    # a heuristic for deciding cutoff
+    masking_cutoff = 2.4 / (opt.glimpseSize)**2
+
+    mask1 = (mask1 > masking_cutoff).data.numpy()
+    mask1 = np.ma.masked_where(mask1 == 0, mask1)
+
+    mask2 = (mask2 > masking_cutoff).data.numpy()
+    mask2 = np.ma.masked_where(mask2 == 0, mask2)
+
+    ax[0].imshow(image1.data.numpy(), cmap=mpl.cm.bone)
+    ax[0].imshow(mask1, interpolation="nearest", cmap=mpl.cm.jet_r, alpha=0.7)
+
+    ax[1].imshow(image2.data.numpy(), cmap=mpl.cm.bone)
+    ax[1].imshow(mask2, interpolation="nearest", cmap=mpl.cm.ocean, alpha=0.7)
+
+    plt.title(label, fontdict=None, loc='center', pad=None)
+
+    plt.savefig(os.path.join(images_path, name))
+
+def visualize():
 
     # set up the optimizer.
     bce = torch.nn.BCELoss()
-
+    if opt.cuda:
+        bce = bce.cuda()
 
     # initialise the model
     discriminator = ArcBinaryClassifier(num_glimpses=opt.numGlimpses,
                                         glimpse_h=opt.glimpseSize,
                                         glimpse_w=opt.glimpseSize,
                                         controller_out=opt.numStates)
-
-    if opt.cuda:
-        bce = bce.cuda()
-        discriminator.cuda()
     
     discriminator.load_state_dict(torch.load(os.path.join("saved_models", opt.name, opt.load)))
 
@@ -69,63 +90,32 @@ def test(epochs=1):
     # load the dataset in memory.
     loader = Batcher(batch_size=opt.batchSize, image_size=opt.imageSize)
 
-    # retrieve total number of samples
-    num_unique_chars = loader.data.shape[0]
-    num_samples_per_char = loader.data.shape[1]
-    total_num_samples = num_unique_chars * num_samples_per_char
+    X, Y = loader.fetch_batch("test")
+    pred = discriminator(X)
+    loss = bce(pred, Y.float())
 
-    # calc number of steps per epoch
-    num_batches_per_epoch = int(total_num_samples / opt.batchSize)
+    for sample_num, sample in enumerate(X):
 
-    print('num_batches_per_epoch', num_batches_per_epoch)
+        all_hidden = arc._forward(sample[None, :, :])[:, 0, :]  # (2*numGlimpses, controller_out)
+        glimpse_params = torch.tanh(arc.glimpser(all_hidden))
+        masks = arc.glimpse_window.get_attention_mask(glimpse_params, mask_h=opt.imageSize, mask_w=opt.imageSize)
 
-    # loop thru epochs
+        sample_pred = pred[sample_num].item()
+        sample_target = Y[sample_num].item()
 
-    all_epoch_losses = []  # track all epoch losses here, for a whole batch
-    all_epoch_acc = []
+        # separate the masks of each image.
+        masks1 = []
+        masks2 = []
 
-    # used for precision recall later
-    preds = []
-    labels = []
+        for i, mask in enumerate(masks):
+            if i % 2 == 1:  # the first image outputs the hidden state for the next image
+                masks1.append(mask)
+            else:
+                masks2.append(mask)
 
-    discriminator.eval()  # set in eval mode
-
-    # turn off gradients
-    with torch.no_grad():
-
-        for epoch in range(epochs):
-
-            running_epoch_loss = 0
-            running_epoch_acc = 0
-
-            # loop through num of batches in an epoch
-            for batch_num in range(num_batches_per_epoch):
-
-                X, Y = loader.fetch_batch("test")  # loader loads data to cuda if available
-
-                pred = discriminator(X)
-                batch_loss = bce(pred, Y.float())
-                running_epoch_loss += batch_loss.item()  # sum all the loss
-
-                batch_acc = get_pct_accuracy(pred, Y)
-                running_epoch_acc += batch_acc
-
-                if batch_num % 100 == 0:
-                    print("Batch: {} \t Test: Acc={}%, Loss={}:".format(batch_num, batch_acc, batch_loss))
-
-            # append the average loss over the epoch (for a whole batch)
-            all_epoch_losses.append(running_epoch_loss / num_batches_per_epoch)
-            all_epoch_acc.append(running_epoch_acc / num_batches_per_epoch)
-
-        # loop through losses and display per epoch
-        for i in range(len(all_epoch_losses)):
-            print('Epoch {} - Loss: {}, Accuracy: {}'.format(i, all_epoch_losses[i], all_epoch_acc[i]))
-
-
-
-
-def main():
-    test()
+        for i, (mask1, mask2) in enumerate(zip(masks1, masks2)):
+            display(sample[0], mask1, sample[1], mask2, sample_pred, sample_target, "sample_{}_img_{}".format(sample_num, i))
+            # print('made it here too!')
 
 if __name__ == "__main__":
-    main()
+    visualize()

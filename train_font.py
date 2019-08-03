@@ -84,48 +84,51 @@ def train():
     save_every = timedelta(minutes=10)
 
     i = -1
+
+
     while True:
         i += 1
 
+
         X, Y = loader.fetch_batch("train")
+        discriminator.train()  # set to train mode
         pred = discriminator(X)
         loss = bce(pred, Y.float())
 
-        if i % 10 == 0:
+        # note that this only validating every 10 steps of training, need to fix this later 
+        # need to set in eval mode and turn off gradients in eval mode
+        
+        with torch.no_grad():
+            if i % 10 == 0:
 
-            # validate your model
-            X_val, Y_val = loader.fetch_batch("val")
-            pred_val = discriminator(X_val)
-            loss_val = bce(pred_val, Y_val.float())
+                # validate your model
+                X_val, Y_val = loader.fetch_batch("val")
+                discriminator.eval()  # set to evaluation mode
+                pred_val = discriminator(X_val)
+                loss_val = bce(pred_val, Y_val.float())
 
-            # print('prediction', pred_val)
-            # print('Y_val', pred_val)
+                training_loss = loss.item()
+                validation_loss = loss_val.item()
 
-            # training_loss = loss.data[0]
-            # validation_loss = loss_val.data[0]
-
-            training_loss = loss.item()
-            validation_loss = loss_val.item()
-
-            print("Iteration: {} \t Train: Acc={}%, Loss={} \t\t Validation: Acc={}%, Loss={}".format(
-                i, get_pct_accuracy(pred, Y), training_loss, get_pct_accuracy(pred_val, Y_val), validation_loss
-            ))
-
-            if best_validation_loss is None:
-                best_validation_loss = validation_loss
-
-            if best_validation_loss > (saving_threshold * validation_loss):
-                print("Significantly improved validation loss from {} --> {}. Saving...".format(
-                    best_validation_loss, validation_loss
+                print("Iteration: {} \t Train: Acc={}%, Loss={} \t\t Validation: Acc={}%, Loss={}".format(
+                    i, get_pct_accuracy(pred, Y), training_loss, get_pct_accuracy(pred_val, Y_val), validation_loss
                 ))
-                discriminator.save_to_file(os.path.join(models_path, str(validation_loss)))
-                best_validation_loss = validation_loss
-                last_saved = datetime.utcnow()
 
-            if last_saved + save_every < datetime.utcnow():
-                print("It's been too long since we last saved the model. Saving...")
-                discriminator.save_to_file(os.path.join(models_path, str(validation_loss)))
-                last_saved = datetime.utcnow()
+                if best_validation_loss is None:
+                    best_validation_loss = validation_loss
+
+                if best_validation_loss > (saving_threshold * validation_loss):
+                    print("Significantly improved validation loss from {} --> {}. Saving...".format(
+                        best_validation_loss, validation_loss
+                    ))
+                    discriminator.save_to_file(os.path.join(models_path, str(validation_loss)))
+                    best_validation_loss = validation_loss
+                    last_saved = datetime.utcnow()
+
+                if last_saved + save_every < datetime.utcnow():
+                    print("It's been too long since we last saved the model. Saving...")
+                    discriminator.save_to_file(os.path.join(models_path, str(validation_loss)))
+                    last_saved = datetime.utcnow()
 
         optimizer.zero_grad()
         loss.backward()
@@ -137,9 +140,7 @@ def main() -> None:
     p = multiprocessing.Process(target=train, name="Train")
     p.start()
 
-    train()
-
-    time.sleep(10)  # 14400 secs for 4 hrs
+    time.sleep(14400)  # 14400 secs for 4 hrs
 
     # If thread is active
     if p.is_alive():
